@@ -34,15 +34,22 @@ def s(v):
     v = str(v).strip()
     return v or None
 
-def money(v):
-    """'$1,000' -> 1000.0 ; 'Not applicable'/blank -> None"""
-    if v is None: return None
+def money(v, absent_is_zero=False):
+    """'$1,000' -> 1000.0 ; blank/'Not applicable' -> None.
+
+    absent_is_zero: OPM writes the literal string "None" in a deductible cell to
+    mean the plan has NO deductible, not that the figure is unknown - 36 of the
+    118 plans for 2027. Parsing that as null loses a genuine selling point, so
+    deductible columns pass absent_is_zero=True and get 0.0 instead.
+    """
+    if v is None: return 0.0 if absent_is_zero else None
     t = str(v).strip()
-    if not t or t.lower() in ('not applicable', 'n/a', 'na', 'none', '-'): return None
+    if not t or t.lower() in ('not applicable', 'n/a', 'na', 'none', '-'):
+        return 0.0 if absent_is_zero else None
     m = re.search(r'-?[\d,]+(?:\.\d+)?', t.replace('$', ''))
-    if not m: return None
+    if not m: return 0.0 if absent_is_zero else None
     try: return float(m.group(0).replace(',', ''))
-    except ValueError: return None
+    except ValueError: return 0.0 if absent_is_zero else None
 
 report = []
 def note(m):
@@ -111,7 +118,7 @@ for r in bn_rows:
     if o is None: continue
     matched += 1
     for dest, col in BEN.items():
-        o[dest] = money(r[bn_idx[col]])
+        o[dest] = money(r[bn_idx[col]], absent_is_zero=dest.startswith('deductible_'))
     for dest, col in RAWCOLS.items():
         o[dest] = s(r[bn_idx[col]])
     for t in range(7):

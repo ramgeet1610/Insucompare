@@ -32,6 +32,10 @@ const ENROLLMENT_TYPES = ['Self Only', 'Self Plus One', 'Self and Family'];
 const ENROLLMENT_TO_RATE_LABEL = { 'Self Only': 'Self', 'Self Plus One': 'Self Plus One', 'Self and Family': 'Self & Family' };
 const ENROLLMENT_DEDUCTIBLE_FIELD = { 'Self Only': 'deductible_self', 'Self Plus One': 'deductible_self_plus_one', 'Self and Family': 'deductible_family' };
 const ENROLLMENT_OOPMAX_FIELD = { 'Self Only': 'oop_max_self', 'Self Plus One': 'oop_max_self_plus_one', 'Self and Family': 'oop_max_family' };
+// 15 plans (every CDHP/HDHP) come with money the employer puts into an HSA or HRA
+// on your behalf - $42 to $1,200 for Self Only. It is real money against medical
+// costs, so leaving it out made those plans look worse than they are.
+const ENROLLMENT_HSA_FIELD = { 'Self Only': 'hsa_hra_self', 'Self Plus One': 'hsa_hra_self_plus_one', 'Self and Family': 'hsa_hra_family' };
 
 function parseCostShare(str, assumedAllowedAmount) {
   if (str == null) return null;
@@ -151,6 +155,8 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
       visitCosts,
       deductible: plan[ENROLLMENT_DEDUCTIBLE_FIELD[enrollmentType]],
       oopMax: plan[ENROLLMENT_OOPMAX_FIELD[enrollmentType]],
+      employerContribution: plan[ENROLLMENT_HSA_FIELD[enrollmentType]] || 0,
+      accountType: plan.hsa_hra_type && plan.hsa_hra_type !== 'Not Applicable' ? plan.hsa_hra_type : null,
       drugCost: drugResult.totalAnnualDrugCost,
       hasUnknownDrugCosts: drugResult.hasUnknown,
       drugBreakdown: drugResult.breakdown,
@@ -770,6 +776,9 @@ export default function FEHBComparison() {
   const [drugsInput, setDrugsInput] = useState('');
   const [results, setResults] = useState(null);
   const [viewMode, setViewMode] = useState('cards');
+  // The whole point of showing two figures is that they often disagree, so let
+  // people rank by either one rather than trusting the default order.
+  const [sortBy, setSortBy] = useState('typical'); // 'typical' | 'ceiling'
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   // True when the ZIP is not in medical_zip_info.json. The comparison still runs,
@@ -1050,24 +1059,50 @@ export default function FEHBComparison() {
               care. <strong style={{ color: COLORS.ink }}>Most you could pay</strong> is premium plus the
               plan's out-of-pocket maximum: the ceiling in a bad year. Plans are sorted by the first
               number, so read both before choosing — a plan can win on one and lose badly on the
-              other. Neither figure credits the HSA or HRA contribution that high-deductible plans
-              make on your behalf.
+              other. Where a plan comes with an employer HSA or HRA contribution, that money is
+              shown on the plan and taken off the worst-case figure, since a bad year uses all
+              of it; the typical-year figure leaves it out, because in a quiet year you would
+              not spend it.
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <div style={{
+            display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center',
+          }}>
             <ViewToggle active={viewMode === 'cards'} onClick={() => setViewMode('cards')}>Card view</ViewToggle>
             <ViewToggle active={viewMode === 'table'} onClick={() => setViewMode('table')}>Compare side by side</ViewToggle>
           </div>
 
-          {viewMode === 'table' && <LedgerTable results={results} enrollmentType={enrollmentType} drugsInput={drugsInput} />}
+          <div style={{
+            display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center',
+          }}>
+            <span style={{ fontSize: '0.78rem', color: COLORS.inkSoft, fontWeight: 600 }}>
+              Rank by
+            </span>
+            <ViewToggle active={sortBy === 'typical'} onClick={() => setSortBy('typical')}>
+              Typical year
+            </ViewToggle>
+            <ViewToggle active={sortBy === 'ceiling'} onClick={() => setSortBy('ceiling')}>
+              Worst case
+            </ViewToggle>
+          </div>
 
-          {viewMode === 'cards' && (() => {
+          {(() => {
+            const ceilingOf = (p) => p.oopMax == null
+              ? p.grandTotal
+              : (p.annualPremium || 0) + p.oopMax - (p.employerContribution || 0);
+            const ordered = sortBy === 'ceiling'
+              ? [...results].sort((a, b) => ceilingOf(a) - ceilingOf(b))
+              : results;
+
+            if (viewMode === 'table') {
+              return <LedgerTable results={ordered} enrollmentType={enrollmentType} drugsInput={drugsInput} sortBy={sortBy} />;
+            }
             // Shared scale so every card's bar is measured against the same maximum.
-            const scaleMax = Math.max(...results.map(r => r.grandTotal || 0));
-            return results.map((plan, idx) => (
+            const scaleMax = Math.max(...ordered.map(r => r.grandTotal || 0));
+            return ordered.map((plan, idx) => (
               <PlanCard
-                key={plan.planCode} plan={plan} idx={idx}
+                key={plan.planCode} plan={plan} idx={idx} sortBy={sortBy}
                 enrollmentType={enrollmentType} drugsInput={drugsInput} scaleMax={scaleMax}
               />
             ));
@@ -1708,7 +1743,7 @@ function CostBar({ premium, copays, scaleMax, copayLabel = 'Estimated copays' })
   );
 }
 
-function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax }) {
+function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
   const [showDrugs, setShowDrugs] = useState(false);
   const isBest = idx === 0;
 
@@ -1728,7 +1763,7 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax }) {
               color: COLORS.white, background: COLORS.rust, padding: '3px 8px', borderRadius: 5,
               letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8,
             }}>
-              Cheapest in a typical year
+              {sortBy === 'ceiling' ? 'Lowest worst case' : 'Cheapest in a typical year'}
             </div>
           )}
           <div style={{ fontFamily: FONT_SERIF, fontWeight: 700, fontSize: '1.12rem', color: COLORS.ink, lineHeight: 1.2 }}>
@@ -1743,6 +1778,14 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax }) {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 11, flexWrap: 'wrap' }}>
         <NetworkChip breadth={plan.networkBreadth} />
+        {plan.employerContribution > 0 && (
+          <span style={{
+            fontSize: '0.7rem', fontWeight: 600, color: COLORS.good, background: COLORS.goodBg,
+            padding: '3px 8px', borderRadius: 5,
+          }}>
+            Employer adds {fmt(plan.employerContribution)}/yr
+          </span>
+        )}
         {DISCONTINUED_2027.has(plan.planCode) && (
           <span style={{
             fontSize: '0.7rem', fontWeight: 700, color: COLORS.white, background: '#9B2C2C',
@@ -1772,6 +1815,13 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax }) {
         {drugsInput.trim() && <LedgerLine label="Estimated drug costs" value={fmt(plan.drugCost)} />}
         <LedgerLine label="Deductible" value={fmt(plan.deductible)} />
         <LedgerLine label="Out-of-pocket maximum" value={fmt(plan.oopMax)} />
+        {plan.employerContribution > 0 && (
+          <LedgerLine
+            label={plan.accountType === 'Health Savings Account'
+              ? 'Employer HSA contribution' : 'Employer HRA contribution'}
+            value={`−${fmt(plan.employerContribution)}`}
+          />
+        )}
       </div>
 
       <div style={{
@@ -1800,11 +1850,12 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax }) {
           <span style={{ fontSize: '0.83rem', color: COLORS.inkSoft }}>
             Most you could pay
             <span style={{ display: 'block', fontSize: '0.72rem', marginTop: 1 }}>
-              Premium + this plan's out-of-pocket maximum
+              Premium + out-of-pocket maximum
+              {plan.employerContribution > 0 && ', less the employer contribution'}
             </span>
           </span>
           <span className="fehb-num" style={{ fontWeight: 600, fontSize: '1.05rem', color: COLORS.inkSoft }}>
-            {fmt((plan.annualPremium || 0) + plan.oopMax)}
+            {fmt((plan.annualPremium || 0) + plan.oopMax - plan.employerContribution)}
           </span>
         </div>
       )}
@@ -1867,7 +1918,7 @@ function LedgerLine({ label, value }) {
   );
 }
 
-function LedgerTable({ results, enrollmentType, drugsInput }) {
+function LedgerTable({ results, enrollmentType, drugsInput, sortBy }) {
   return (
     <div style={{
       overflowX: 'auto', background: COLORS.white, border: `1px solid ${COLORS.rule}`,
@@ -1882,8 +1933,8 @@ function LedgerTable({ results, enrollmentType, drugsInput }) {
             <th style={thStyle('right')}>Deductible</th>
             <th style={thStyle('right')}>OOP max</th>
             {drugsInput.trim() && <th style={thStyle('right')}>Drugs</th>}
-            <th style={thStyle('right')}>Typical year</th>
-            <th style={thStyle('right')}>Most you could pay</th>
+            <th style={thStyle('right')}>Typical year{sortBy !== 'ceiling' && ' \u2193'}</th>
+            <th style={thStyle('right')}>Most you could pay{sortBy === 'ceiling' && ' \u2193'}</th>
           </tr>
         </thead>
         <tbody>
@@ -1905,7 +1956,9 @@ function LedgerTable({ results, enrollmentType, drugsInput }) {
                 {fmt(plan.grandTotal)}
               </td>
               <td className="fehb-num" style={{ ...tdStyle('right'), color: COLORS.inkSoft }}>
-                {plan.oopMax != null ? fmt((plan.annualPremium || 0) + plan.oopMax) : '—'}
+                {plan.oopMax != null
+                  ? fmt((plan.annualPremium || 0) + plan.oopMax - plan.employerContribution)
+                  : '—'}
               </td>
             </tr>
           ))}
