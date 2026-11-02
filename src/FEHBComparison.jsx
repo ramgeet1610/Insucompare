@@ -130,6 +130,7 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
   const results = eligiblePlans.map(plan => {
     const rateRow = data.rates.find(r => r.plan_code === plan.plan_code && r.enrollment_type === rateLabel);
     const annualPremium = rateRow ? rateRow.annual_premium_employee : null;
+    const biweeklyPremium = rateRow ? rateRow.employee_pays : null;
     const visitCosts = estimateVisitCosts(plan, usageProfile);
 
     let drugResult = { totalAnnualDrugCost: 0, hasUnknown: false, breakdown: [] };
@@ -152,6 +153,7 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
       networkBreadth,
       formularyUrl: plan.plan_formulary_url,
       annualPremium,
+      biweeklyPremium,
       visitCosts,
       deductible: plan[ENROLLMENT_DEDUCTIBLE_FIELD[enrollmentType]],
       oopMax: plan[ENROLLMENT_OOPMAX_FIELD[enrollmentType]],
@@ -282,6 +284,7 @@ function compareDentalPlans({ zipCode, enrollmentType, usageLevel }, dentalData)
       website: plan.website,
       providerDirectoryUrl: plan.provider_directory_url,
       annualPremium,
+      biweeklyPremium,
       deductible,
       annualMax: plan.annual_max,
       annualMaxUnlimited: plan.annual_max_unlimited,
@@ -310,6 +313,7 @@ function compareVisionPlans({ enrollmentType }, visionPlans) {
       website: plan.website,
       providerDirectoryUrl: plan.provider_directory_url,
       annualPremium: plan[`biweekly_${enrollField}`] != null ? plan[`biweekly_${enrollField}`] * 26 : null,
+      biweeklyPremium: plan[`biweekly_${enrollField}`],
       examCoverage: plan.exam_coverage,
       lensesCoverage: plan.lenses_coverage,
       framesCoverage: plan.frames_coverage,
@@ -322,6 +326,14 @@ function compareVisionPlans({ enrollmentType }, visionPlans) {
 function fmt(n) {
   if (n == null || isNaN(n)) return '—';
   return '$' + Math.round(n).toLocaleString();
+}
+
+// Federal pay is biweekly, so what lands on a leave-and-earnings statement is the
+// per-pay-period deduction, not the annual figure. Shown to the cent because that
+// is how it appears on the statement.
+function fmtExact(n) {
+  if (n == null || isNaN(n)) return '—';
+  return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ===== DESIGN TOKENS =====
@@ -1605,7 +1617,11 @@ function VisionPlanCard({ plan, idx }) {
       </div>
 
       <div style={{ borderTop: `1px solid ${COLORS.rule}`, paddingTop: 4 }}>
-        <LedgerLine label="Annual premium (your share)" value={fmt(plan.annualPremium)} />
+        <LedgerLine
+          label="Annual premium (your share)"
+          value={fmt(plan.annualPremium)}
+          sub={plan.biweeklyPremium != null ? `${fmtExact(plan.biweeklyPremium)} per pay period` : null}
+        />
       </div>
 
       <div style={{
@@ -1615,8 +1631,17 @@ function VisionPlanCard({ plan, idx }) {
         <span style={{ fontWeight: 600, fontSize: '0.88rem', fontFamily: FONT_SANS, color: COLORS.ink }}>
           Annual premium
         </span>
-        <span className="fehb-num" style={{ fontWeight: 700, fontSize: '1.4rem', color: COLORS.navy }}>
-          {fmt(plan.annualPremium)}
+        <span style={{ textAlign: 'right' }}>
+          <span className="fehb-num" style={{ fontWeight: 700, fontSize: '1.4rem', color: COLORS.navy }}>
+            {fmt(plan.annualPremium)}
+          </span>
+          {plan.biweeklyPremium != null && (
+            <span className="fehb-num" style={{
+              display: 'block', fontSize: '0.74rem', color: COLORS.inkSoft, fontWeight: 500, marginTop: 1,
+            }}>
+              {fmtExact(plan.biweeklyPremium)} per pay period
+            </span>
+          )}
         </span>
       </div>
 
@@ -1675,7 +1700,11 @@ function DentalPlanCard({ plan, idx, scaleMax }) {
       </div>
 
       <div style={{ borderTop: `1px solid ${COLORS.rule}`, paddingTop: 4 }}>
-        <LedgerLine label="Annual premium (your share)" value={fmt(plan.annualPremium)} />
+        <LedgerLine
+          label="Annual premium (your share)"
+          value={fmt(plan.annualPremium)}
+          sub={plan.biweeklyPremium != null ? `${fmtExact(plan.biweeklyPremium)} per pay period` : null}
+        />
         <LedgerLine label="Deductible" value={fmt(plan.deductible)} />
         <LedgerLine label="Annual maximum benefit"
           value={plan.annualMaxUnlimited ? 'No annual limit' : fmt(plan.annualMax)} />
@@ -1810,7 +1839,11 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
       </div>
 
       <div style={{ borderTop: `1px solid ${COLORS.rule}`, paddingTop: 4 }}>
-        <LedgerLine label="Annual premium (your share)" value={fmt(plan.annualPremium)} />
+        <LedgerLine
+          label="Annual premium (your share)"
+          value={fmt(plan.annualPremium)}
+          sub={plan.biweeklyPremium != null ? `${fmtExact(plan.biweeklyPremium)} per pay period` : null}
+        />
         <LedgerLine label="Estimated visit costs" value={fmt(plan.visitCosts)} />
         {drugsInput.trim() && <LedgerLine label="Estimated drug costs" value={fmt(plan.drugCost)} />}
         <LedgerLine label="Deductible" value={fmt(plan.deductible)} />
@@ -1909,11 +1942,23 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
   );
 }
 
-function LedgerLine({ label, value }) {
+function LedgerLine({ label, value, sub }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: '0.86rem' }}>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      padding: '5px 0', fontSize: '0.86rem', gap: 12,
+    }}>
       <span style={{ color: COLORS.inkSoft }}>{label}</span>
-      <span className="fehb-num" style={{ fontWeight: 600, color: COLORS.ink }}>{value}</span>
+      <span style={{ textAlign: 'right' }}>
+        <span className="fehb-num" style={{ fontWeight: 600, color: COLORS.ink }}>{value}</span>
+        {sub && (
+          <span className="fehb-num" style={{
+            display: 'block', fontSize: '0.74rem', color: COLORS.inkSoft, fontWeight: 500, marginTop: 1,
+          }}>
+            {sub}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -1929,7 +1974,7 @@ function LedgerTable({ results, enrollmentType, drugsInput, sortBy }) {
           <tr style={{ borderBottom: `2px solid ${COLORS.ink}` }}>
             <th style={thStyle('left', true)}>Plan</th>
             <th style={thStyle('left')}>Network</th>
-            <th style={thStyle('right')}>Premium</th>
+            <th style={thStyle('right')}>Premium<span style={{ display: 'block', fontWeight: 400, opacity: 0.7 }}>yr / pay period</span></th>
             <th style={thStyle('right')}>Deductible</th>
             <th style={thStyle('right')}>OOP max</th>
             {drugsInput.trim() && <th style={thStyle('right')}>Drugs</th>}
@@ -1948,7 +1993,14 @@ function LedgerTable({ results, enrollmentType, drugsInput, sortBy }) {
                 <div style={{ color: COLORS.inkSoft, fontSize: '0.72rem' }}>{plan.carrierName}</div>
               </td>
               <td style={tdStyle('left')}><NetworkChip breadth={plan.networkBreadth} /></td>
-              <td className="fehb-num" style={tdStyle('right')}>{fmt(plan.annualPremium)}</td>
+              <td className="fehb-num" style={tdStyle('right')}>
+                {fmt(plan.annualPremium)}
+                {plan.biweeklyPremium != null && (
+                  <span style={{ display: 'block', fontSize: '0.74rem', color: COLORS.inkSoft, fontWeight: 500 }}>
+                    {fmtExact(plan.biweeklyPremium)}
+                  </span>
+                )}
+              </td>
               <td className="fehb-num" style={tdStyle('right')}>{fmt(plan.deductible)}</td>
               <td className="fehb-num" style={tdStyle('right')}>{fmt(plan.oopMax)}</td>
               {drugsInput.trim() && <td className="fehb-num" style={tdStyle('right')}>{fmt(plan.drugCost)}</td>}
