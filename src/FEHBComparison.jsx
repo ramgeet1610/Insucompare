@@ -1367,7 +1367,7 @@ export default function FEHBComparison() {
           </button>
           {FEEDBACK_URL && <span style={{ color: COLORS.rule }}>&middot;</span>}
           {FEEDBACK_URL && (
-            <a href={FEEDBACK_URL} target="_blank" rel="noreferrer" style={{
+            <a href={FEEDBACK_URL} style={{
               color: COLORS.navySoft, textDecoration: 'underline',
               fontSize: '0.74rem', fontFamily: FONT_SANS, padding: '0 6px',
             }}>
@@ -1520,15 +1520,17 @@ function PlanYearNotice({ coverageType }) {
 // off-site. Put the form URL here (a Google Form "send" link, a Tally form, or
 // any hosted form) and both feedback prompts switch on. While it is empty they
 // render nothing at all, so no dead link can ship.
-const FEEDBACK_URL = '';
+const FEEDBACK_URL = 'mailto:tanyaramesh1019@gmail.com?subject=InsuCompare%20feedback';
 
 function FeedbackButton({ children, style }) {
   if (!FEEDBACK_URL) return null;
+  // A mailto: handed target="_blank" leaves an empty tab behind in some browsers.
+  const isMail = FEEDBACK_URL.startsWith('mailto:');
   return (
     <a
       href={FEEDBACK_URL}
-      target="_blank"
-      rel="noreferrer"
+      target={isMail ? undefined : '_blank'}
+      rel={isMail ? undefined : 'noreferrer'}
       className="fehb-btn-primary"
       style={{
         display: 'inline-block', textDecoration: 'none', textAlign: 'center',
@@ -1563,7 +1565,7 @@ function FeedbackPrompt() {
         medical details &mdash; we do not want them.
       </p>
       <FeedbackButton style={{ width: '100%', boxSizing: 'border-box' }}>
-        Send feedback
+        Email us about this
       </FeedbackButton>
     </div>
   );

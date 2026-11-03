@@ -49,5 +49,5 @@ If we ever change how this tool works — for example, if we add features that r
 
 ## Contact
 
-Questions about this policy: contact@insucompare.com
+Questions about this policy: tanyaramesh1019@gmail.com
 

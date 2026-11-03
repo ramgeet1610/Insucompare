@@ -96,5 +96,5 @@ A few things worth doing before real traffic, even though the app itself works:
 - The site is configured for the domain `insucompare.com`. If that ever changes, update it in
   four places: the canonical and Open Graph URLs in `index.html`, `public/robots.txt`, and
   `public/sitemap.xml`.
-- The published contact address is `contact@insucompare.com`, set at the bottom of both files
+- The published contact address is `tanyaramesh1019@gmail.com`, set at the bottom of both files
   under `public/legal/`.

@@ -43,4 +43,4 @@ We may update these terms from time to time. Continued use of this tool after ch
 
 ## Contact
 
-Questions about these terms: contact@insucompare.com
+Questions about these terms: tanyaramesh1019@gmail.com
