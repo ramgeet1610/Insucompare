@@ -549,7 +549,7 @@ const TEAM = [
     name: 'Varsha Vivekanandhan',
     role: 'Kansas HOSA State Officer — healthcare access and research',
     bio: 'Varsha is a student at Wichita Collegiate School and a Kansas HOSA State Officer with a strong interest in healthcare, medical research, and community advocacy. She is a co-founder of Rural Healthcare Today, a student-led nonprofit dedicated to supporting rural Kansas healthcare facilities through medical supply and equipment donations. She is also a certified CNA and has researched with Envision, exploring assistive technology for individuals with low vision. Through her leadership, research, and community involvement, Varsha hopes to make healthcare more accessible.',
-    photo: null,
+    photo: '/team/varsha-vivekanandhan.jpg',
     link: null,
   },
 ];
