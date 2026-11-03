@@ -1154,6 +1154,8 @@ export default function FEHBComparison() {
               />
             ));
           })()}
+
+          <FeedbackPrompt />
         </div>
       )}
       </>
@@ -1271,6 +1273,8 @@ export default function FEHBComparison() {
               />
             ));
           })()}
+
+          <FeedbackPrompt />
         </div>
       )}
       </>
@@ -1335,6 +1339,8 @@ export default function FEHBComparison() {
           {visionResults.map((plan, idx) => (
             <VisionPlanCard key={plan.carrierName + plan.planOption} plan={plan} idx={idx} />
           ))}
+
+          <FeedbackPrompt />
         </div>
       )}
       </>
@@ -1359,6 +1365,15 @@ export default function FEHBComparison() {
           }}>
             About Us
           </button>
+          {FEEDBACK_URL && <span style={{ color: COLORS.rule }}>&middot;</span>}
+          {FEEDBACK_URL && (
+            <a href={FEEDBACK_URL} target="_blank" rel="noreferrer" style={{
+              color: COLORS.navySoft, textDecoration: 'underline',
+              fontSize: '0.74rem', fontFamily: FONT_SANS, padding: '0 6px',
+            }}>
+              Send feedback
+            </a>
+          )}
           <span style={{ color: COLORS.rule }}>&middot;</span>
           <button onClick={() => setLegalModal('privacy')} style={{
             background: 'none', border: 'none', color: COLORS.navySoft, textDecoration: 'underline',
@@ -1496,6 +1511,60 @@ function PlanYearNotice({ coverageType }) {
           Enroll at OPM
         </a>
       </div>
+    </div>
+  );
+}
+
+// ===== FEEDBACK =====
+// This is a static site with no backend, so submissions have to land somewhere
+// off-site. Put the form URL here (a Google Form "send" link, a Tally form, or
+// any hosted form) and both feedback prompts switch on. While it is empty they
+// render nothing at all, so no dead link can ship.
+const FEEDBACK_URL = '';
+
+function FeedbackButton({ children, style }) {
+  if (!FEEDBACK_URL) return null;
+  return (
+    <a
+      href={FEEDBACK_URL}
+      target="_blank"
+      rel="noreferrer"
+      className="fehb-btn-primary"
+      style={{
+        display: 'inline-block', textDecoration: 'none', textAlign: 'center',
+        background: COLORS.navy, color: COLORS.white, fontWeight: 600,
+        fontFamily: FONT_SANS, borderRadius: 10, padding: '12px 18px',
+        fontSize: '0.9rem', ...style,
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
+// Shown directly under a set of results: the moment someone spots a wrong number
+// is the moment they will actually report it. The drug-cost bug reached us this
+// way, second-hand, days later.
+function FeedbackPrompt() {
+  if (!FEEDBACK_URL) return null;
+  return (
+    <div style={{
+      marginTop: 22, background: COLORS.white, borderRadius: 14, padding: '18px 20px',
+      boxShadow: SHADOW_CARD, maxWidth: MAXW_FORM, marginLeft: 'auto', marginRight: 'auto',
+    }}>
+      <div style={{
+        fontFamily: FONT_SERIF, fontWeight: 700, fontSize: '1rem', color: COLORS.ink, marginBottom: 5,
+      }}>
+        Does something here look wrong?
+      </div>
+      <p style={{ fontSize: '0.85rem', color: COLORS.inkSoft, lineHeight: 1.55, margin: '0 0 13px' }}>
+        If a figure does not match your plan brochure, or the tool is missing something you needed,
+        tell us. We read every message and corrections get made quickly. Please do not include
+        medical details &mdash; we do not want them.
+      </p>
+      <FeedbackButton style={{ width: '100%', boxSizing: 'border-box' }}>
+        Send feedback
+      </FeedbackButton>
     </div>
   );
 }
