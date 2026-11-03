@@ -109,6 +109,16 @@ RAWCOLS = {
     'urgent_care_cost': 'Urgent Care',
     'preventive_care': 'Preventive Care',
     'Mail Order Pharmacy': 'Mail Order Pharmacy',
+    # Routine care people ask about directly. FEHB medical plans often include
+    # some dental and vision benefit of their own, separate from FEDVIP, and it
+    # is easy to miss that when shopping.
+    'routine_dental_adult': 'Routine Dental Exams and Cleaning for Adults',
+    'routine_dental_child': 'Routine Dental Exams and Cleaning for Children',
+    'routine_eye_exam': 'Routine Eye Exams',
+    'eyeglasses': 'Eyeglasses',
+    'contact_lenses': 'Contact Lenses',
+    'diagnostic_basic': 'Diagnostic Tests or Procedures (e.g., Blood Tests, X-rays, Urinalysis, Ultrasounds)',
+    'inpatient_hospital': 'Hospital Inpatient Cost Per Admission',
 }
 matched = 0
 for r in bn_rows:

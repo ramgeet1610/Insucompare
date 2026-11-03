@@ -63,10 +63,16 @@ function getDrugTier(drugName, planCode, formulary) {
   return { found: true, planMapped: true, tier, covered: tier !== null };
 }
 
+// A drug we cannot price must never contribute $0 to a plan's total. "Not covered"
+// is the WORST outcome for someone who takes the drug, and "no formulary data" means
+// we simply do not know - yet both used to show as $0, which reads as free and
+// floated those plans to the top of the ranking.
 function estimateDrugCost(planRow, drugNames, formulary, fillsPerYear = 12) {
   const breakdown = [];
   let total = 0;
   let anyUnknown = false;
+  const notCovered = [];
+  const unknown = [];
   const planCode = String(planRow.opm_plan_code);
 
   for (const drug of drugNames) {
@@ -74,10 +80,12 @@ function estimateDrugCost(planRow, drugNames, formulary, fillsPerYear = 12) {
     if (!lookup.found || !lookup.planMapped) {
       breakdown.push({ drug, status: 'no_formulary_data_for_this_plan', annualCost: null });
       anyUnknown = true;
+      unknown.push(drug);
       continue;
     }
     if (!lookup.covered) {
       breakdown.push({ drug, status: 'not_covered_on_this_plan', annualCost: null });
+      notCovered.push(drug);
       continue;
     }
     const tierCostStr = planRow[`Tier ${lookup.tier}`];
@@ -85,6 +93,7 @@ function estimateDrugCost(planRow, drugNames, formulary, fillsPerYear = 12) {
     if (perFillCost == null) {
       breakdown.push({ drug, status: 'tier_cost_unparseable', tier: lookup.tier, annualCost: null });
       anyUnknown = true;
+      unknown.push(drug);
       continue;
     }
     const annual = perFillCost * fillsPerYear;
@@ -92,7 +101,11 @@ function estimateDrugCost(planRow, drugNames, formulary, fillsPerYear = 12) {
     breakdown.push({ drug, status: 'estimated', tier: lookup.tier, perFillCost, annualCost: annual });
   }
 
-  return { breakdown, totalAnnualDrugCost: total, hasUnknown: anyUnknown };
+  return {
+    breakdown, totalAnnualDrugCost: total, hasUnknown: anyUnknown,
+    notCoveredDrugs: notCovered, unknownDrugs: unknown,
+    complete: notCovered.length === 0 && unknown.length === 0,
+  };
 }
 
 function resolveEligiblePlans(zipCode, data) {
@@ -133,7 +146,10 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
     const biweeklyPremium = rateRow ? rateRow.employee_pays : null;
     const visitCosts = estimateVisitCosts(plan, usageProfile);
 
-    let drugResult = { totalAnnualDrugCost: 0, hasUnknown: false, breakdown: [] };
+    let drugResult = {
+      totalAnnualDrugCost: 0, hasUnknown: false, breakdown: [],
+      notCoveredDrugs: [], unknownDrugs: [], complete: true,
+    };
     if (drugs && drugs.length > 0) {
       drugResult = estimateDrugCost(plan, drugs, data.formulary);
     }
@@ -152,6 +168,18 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
       networkType: plan.network_type,
       networkBreadth,
       formularyUrl: plan.plan_formulary_url,
+      benefits: {
+        'Preventive care': plan.preventive_care,
+        'Primary care visit': plan.pcp_visit_cost,
+        'Specialist visit': plan.specialist_visit_cost,
+        'Urgent care': plan.urgent_care_cost,
+        'Emergency care': plan.er_cost,
+        'Blood tests, X-rays, ultrasound': plan.diagnostic_basic,
+        'Routine dental exam & cleaning': plan.routine_dental_adult,
+        'Routine eye exam': plan.routine_eye_exam,
+        'Eyeglasses': plan.eyeglasses,
+        'Contact lenses': plan.contact_lenses,
+      },
       annualPremium,
       biweeklyPremium,
       visitCosts,
@@ -161,6 +189,9 @@ function comparePlans({ zipCode, enrollmentType, usageKey, drugs }, data) {
       accountType: plan.hsa_hra_type && plan.hsa_hra_type !== 'Not Applicable' ? plan.hsa_hra_type : null,
       drugCost: drugResult.totalAnnualDrugCost,
       hasUnknownDrugCosts: drugResult.hasUnknown,
+      drugsNotCovered: drugResult.notCoveredDrugs,
+      drugsUnknown: drugResult.unknownDrugs,
+      drugCostComplete: drugResult.complete,
       drugBreakdown: drugResult.breakdown,
       grandTotal,
     };
@@ -1071,7 +1102,10 @@ export default function FEHBComparison() {
               care. <strong style={{ color: COLORS.ink }}>Most you could pay</strong> is premium plus the
               plan's out-of-pocket maximum: the ceiling in a bad year. Plans are sorted by the first
               number, so read both before choosing — a plan can win on one and lose badly on the
-              other. Where a plan comes with an employer HSA or HRA contribution, that money is
+              other. When you enter a medication, any plan we cannot price it on is labelled
+              rather than counted as zero &mdash; a plan that does not cover your drug, or one we
+              have no formulary data for, would otherwise look cheapest precisely because the cost
+              is missing. Where a plan comes with an employer HSA or HRA contribution, that money is
               shown on the plan and taken off the worst-case figure, since a bad year uses all
               of it; the typical-year figure leaves it out, because in a quiet year you would
               not spend it.
@@ -1112,9 +1146,10 @@ export default function FEHBComparison() {
             }
             // Shared scale so every card's bar is measured against the same maximum.
             const scaleMax = Math.max(...ordered.map(r => r.grandTotal || 0));
+            const bestIdx = ordered.findIndex(r => r.drugCostComplete !== false);
             return ordered.map((plan, idx) => (
               <PlanCard
-                key={plan.planCode} plan={plan} idx={idx} sortBy={sortBy}
+                key={plan.planCode} plan={plan} idx={idx} sortBy={sortBy} bestIdx={bestIdx}
                 enrollmentType={enrollmentType} drugsInput={drugsInput} scaleMax={scaleMax}
               />
             ));
@@ -1787,9 +1822,10 @@ function CostBar({ premium, copays, scaleMax, copayLabel = 'Estimated copays' })
   );
 }
 
-function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
+function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy, bestIdx }) {
   const [showDrugs, setShowDrugs] = useState(false);
-  const isBest = idx === 0;
+  const [showBenefits, setShowBenefits] = useState(false);
+  const isBest = idx === (bestIdx == null || bestIdx < 0 ? 0 : bestIdx);
 
   return (
     <div className="fehb-card" style={{
@@ -1838,6 +1874,22 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
             Not offered in 2027
           </span>
         )}
+        {plan.drugsNotCovered && plan.drugsNotCovered.length > 0 && (
+          <span style={{
+            fontSize: '0.7rem', fontWeight: 700, color: COLORS.white, background: '#9B2C2C',
+            padding: '3px 8px', borderRadius: 5,
+          }}>
+            Does not cover {plan.drugsNotCovered.join(', ')}
+          </span>
+        )}
+        {plan.drugsUnknown && plan.drugsUnknown.length > 0 && (
+          <span style={{
+            fontSize: '0.7rem', fontWeight: 600, color: COLORS.warn, background: COLORS.warnBg,
+            padding: '3px 8px', borderRadius: 5,
+          }}>
+            Drug cost unknown &mdash; total is incomplete
+          </span>
+        )}
         {plan.deductible != null && plan.deductible >= 1500 && (
           <span style={{
             fontSize: '0.7rem', fontWeight: 600, color: COLORS.warn, background: COLORS.warnBg,
@@ -1860,7 +1912,23 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
           sub={plan.biweeklyPremium != null ? `${fmtExact(plan.biweeklyPremium)} per pay period` : null}
         />
         <LedgerLine label="Estimated visit costs" value={fmt(plan.visitCosts)} />
-        {drugsInput.trim() && <LedgerLine label="Estimated drug costs" value={fmt(plan.drugCost)} />}
+        {drugsInput.trim() && (
+          <LedgerLine
+            label="Estimated drug costs"
+            value={
+              plan.drugsNotCovered.length > 0 ? 'Not covered'
+              : plan.drugsUnknown.length > 0 ? 'Unknown'
+              : fmt(plan.drugCost)
+            }
+            sub={
+              plan.drugsNotCovered.length > 0
+                ? `This plan does not cover ${plan.drugsNotCovered.join(', ')}`
+                : plan.drugsUnknown.length > 0
+                  ? `No formulary data for ${plan.drugsUnknown.join(', ')}`
+                  : null
+            }
+          />
+        )}
         <LedgerLine label="Deductible" value={fmt(plan.deductible)} />
         <LedgerLine label="Out-of-pocket maximum" value={fmt(plan.oopMax)} />
         {plan.employerContribution > 0 && (
@@ -1907,6 +1975,42 @@ function PlanCard({ plan, idx, enrollmentType, drugsInput, scaleMax, sortBy }) {
           </span>
         </div>
       )}
+
+      <div style={{ marginTop: 10 }}>
+        <button onClick={() => setShowBenefits(!showBenefits)} style={{
+          background: 'none', border: 'none', color: COLORS.navy, fontSize: '0.8rem',
+          fontWeight: 600, cursor: 'pointer', padding: 0, fontFamily: FONT_SANS,
+        }}>
+          {showBenefits ? 'Hide' : 'Show'} what routine care costs
+        </button>
+        {showBenefits && (
+          <div style={{ marginTop: 8, fontSize: '0.82rem' }}>
+            <div style={{
+              fontSize: '0.75rem', color: COLORS.inkSoft, lineHeight: 1.5,
+              background: COLORS.paperDeep, borderRadius: 7, padding: '8px 11px', marginBottom: 8,
+            }}>
+              These are <strong style={{ color: COLORS.ink }}>your</strong> share, in network. A
+              percentage is coinsurance you pay <strong style={{ color: COLORS.ink }}>after the
+              deductible</strong> is met &mdash; the plan pays the rest. Preventive care is
+              commonly free whether or not you have met the deductible.
+            </div>
+            {Object.entries(plan.benefits).filter(([, v]) => v).map(([label, value], i, arr) => (
+              <div key={label} style={{
+                display: 'flex', justifyContent: 'space-between', gap: 14, padding: '4px 0',
+                borderBottom: i < arr.length - 1 ? `1px dashed ${COLORS.rule}` : 'none',
+              }}>
+                <span style={{ color: COLORS.inkSoft }}>{label}</span>
+                <span style={{ color: COLORS.ink, fontWeight: 600, textAlign: 'right' }}>{value}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: '0.74rem', color: COLORS.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
+              Dental and vision benefits listed here are whatever this medical plan includes
+              itself. They are separate from FEDVIP dental and vision, which you enrol in and pay
+              for independently &mdash; see the Dental and Vision tabs.
+            </div>
+          </div>
+        )}
+      </div>
 
       {drugsInput.trim() && plan.drugBreakdown.length > 0 && (
         <div style={{ marginTop: 10 }}>
