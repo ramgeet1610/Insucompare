@@ -912,7 +912,7 @@ export default function FEHBComparison() {
         onAbout={() => setLegalModal('about')}
       />
 
-      <PlanYearNotice />
+      <PlanYearNotice coverageType={coverageType} />
 
       <Hero coverageType={coverageType} />
 
@@ -1394,6 +1394,16 @@ function Field({ label, controlId, group, children }) {
 const DATA_PLAN_YEAR = 2027;
 const CURRENT_SHOPPING_YEAR = 2027;
 const OPEN_SEASON_TEXT = 'November 9 \u2013 December 14, 2026';
+// FEHB changes for active non-Postal employees take effect on the first day of the
+// first full pay period beginning on or after 1 January - January 10, 2027, NOT
+// January 1. FEDVIP is January 1 for everyone. Annuitants are January 1 too, but
+// this tool is for active employees, so the medical figure is the employee one.
+// Source: OPM Federal Benefits Open Season Highlights, 2027 Plan Year.
+const EFFECTIVE_DATE = {
+  medical: 'January 10, 2027',
+  dental: 'January 1, 2027',
+  vision: 'January 1, 2027',
+};
 const OPM_OPEN_SEASON_URL = 'https://www.opm.gov/healthcare-insurance/open-season/';
 
 // Plan codes in this (2026) dataset that OPM has confirmed will NOT be offered in
@@ -1407,7 +1417,7 @@ const OPM_OPEN_SEASON_URL = 'https://www.opm.gov/healthcare-insurance/open-seaso
 // per-plan flag is needed any more.
 const DISCONTINUED_2027 = new Set();
 
-function PlanYearNotice() {
+function PlanYearNotice({ coverageType }) {
   // Data year behind the year people are shopping for: loud warning.
   if (DATA_PLAN_YEAR < CURRENT_SHOPPING_YEAR) {
     return (
@@ -1440,7 +1450,12 @@ function PlanYearNotice() {
         gap: 8, flexWrap: 'wrap', alignItems: 'baseline',
       }}>
         <strong style={{ color: '#fff' }}>{DATA_PLAN_YEAR} plan year rates.</strong>
-        <span>Open Season runs {OPEN_SEASON_TEXT} &mdash; changes take effect January 1, {DATA_PLAN_YEAR}.</span>
+        <span>
+          Open Season runs {OPEN_SEASON_TEXT} &mdash; new{' '}
+          {coverageType === 'medical' ? 'FEHB' : 'FEDVIP'} coverage starts{' '}
+          {EFFECTIVE_DATE[coverageType] || 'January 1, 2027'}
+          {coverageType === 'medical' && ' for active employees'}.
+        </span>
         <a href={OPM_OPEN_SEASON_URL} target="_blank" rel="noreferrer"
            style={{ color: '#fff', textDecoration: 'underline' }}>
           Enroll at OPM
