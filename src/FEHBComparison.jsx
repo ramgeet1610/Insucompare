@@ -649,9 +649,10 @@ function AboutModal({ onClose }) {
           </p>
 
           <p style={{ lineHeight: 1.6, color: COLORS.inkSoft, margin: '0 0 14px' }}>
-            The tool is free, needs no account, and collects nothing about you. Your ZIP code,
-            enrollment type, and any medications you enter stay in your browser — they are never
-            sent to a server, never stored, and never shared.
+            The tool is free and needs no account. Your ZIP code, enrollment type, and any
+            medications you enter stay in your browser — they are never sent to a server, never
+            stored, and never shared. We count page visits in aggregate so we know the tool is
+            being used; that counting never sees anything you type here.
           </p>
 
           <h3 style={{ fontFamily: FONT_SERIF, fontSize: '1.15rem', fontWeight: 700, margin: '22px 0 8px' }}>
