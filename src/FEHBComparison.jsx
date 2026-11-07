@@ -432,7 +432,7 @@ function GlobalStyle() {
       .fehb-header { position: sticky; top: 0; z-index: 900; background: ${COLORS.deep}; border-bottom: 1px solid rgba(255,255,255,0.09); }
       .fehb-header-inner { max-width: ${MAXW_PAGE}px; margin: 0 auto; padding: 0 22px; height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
       .fehb-brand { display: flex; align-items: center; gap: 10px; background: none; border: none; padding: 0; cursor: pointer; }
-      .fehb-mark { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; background: ${COLORS.rust}; color: #042A20; display: flex; align-items: center; justify-content: center; font-family: ${FONT_DISPLAY}; font-weight: 700; font-size: 0.8rem; letter-spacing: -0.02em; }
+      .fehb-mark { width: 24px; height: 26px; flex-shrink: 0; display: block; }
       .fehb-wordmark { font-family: ${FONT_DISPLAY}; font-weight: 700; font-size: 1.06rem; letter-spacing: -0.02em; color: #fff; }
       .fehb-nav { display: flex; align-items: center; gap: 2px; }
       .fehb-nav-link { background: none; border: none; cursor: pointer; font-family: ${FONT_SANS}; font-size: 0.85rem; font-weight: 500; color: ${COLORS.onDeep}; padding: 7px 12px; border-radius: 7px; transition: background 0.15s ease, color 0.15s ease; }
@@ -1582,7 +1582,10 @@ function SiteHeader({ coverageType, setCoverageType, onAbout }) {
     <header className="fehb-header">
       <div className="fehb-header-inner">
         <button className="fehb-brand" onClick={() => setCoverageType('medical')} aria-label="InsuCompare home">
-          <span className="fehb-mark" aria-hidden="true">IC</span>
+          <svg className="fehb-mark" viewBox="0 0 40 44" aria-hidden="true" focusable="false">
+            <rect x="0" y="0" width="16" height="44" rx="5" fill="#44646E" />
+            <rect x="24" y="20" width="16" height="24" rx="5" fill="#00A86B" />
+          </svg>
           <span className="fehb-wordmark">InsuCompare</span>
         </button>
 
